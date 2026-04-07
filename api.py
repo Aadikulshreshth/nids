@@ -104,4 +104,9 @@ def live_detect():
 #Alias for Stitch UI (IMPORTANT)
 @app.get("/predict_live")
 def predict_live():
-    return live_detect()
+    data = live_detect()
+
+    return {
+        "success": True,
+        "data": data
+    }
