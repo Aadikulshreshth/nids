@@ -4,7 +4,7 @@ import joblib
 import pandas as pd
 import numpy as np
 import threading
-
+from fastapi import Request
 from sniffer import flows, start_sniffing
 from features import extract_features
 
@@ -140,3 +140,28 @@ def predict_live_get():
         "status": "success",
         "predictions": live_detect()
     }
+
+@app.api_route("/predict_live", methods=["GET", "POST"])
+async def predict_live(request: Request):
+    try:
+        # Try to read JSON (if UI sends it)
+        try:
+            body = await request.json()
+        except:
+            body = {}
+
+        data = live_detect()
+
+        return {
+            "success": True,
+            "status": "success",
+            "data": data,
+            "predictions": data
+        }
+
+    except Exception as e:
+        return {
+            "success": False,
+            "status": "error",
+            "message": str(e)
+        }
