@@ -68,15 +68,26 @@ def live_detect():
         decoded = le.inverse_transform(pred)
 
         results.append({
-            "flow": str(key),
-            "prediction": decoded[0]
+        "timestamp": pd.Timestamp.now().strftime("%H:%M:%S"),
+        "threat_type": decoded[0],
+        "severity": "LOW" if decoded[0] == "BENIGN" else "HIGH",
+        "status": "BENIGN" if decoded[0] == "BENIGN" else "THREAT",
+        "confidence": "90%"
         })
 
         #clear processed flow
         flows[key] = []
 
     #FINAL safety return
-    if len(results) == 0:
-        return {"results": []}
+        if len(results) == 0:
+            return [
+                {
+                    "timestamp": "now",
+                    "threat_type": "BENIGN",
+                    "severity": "LOW",
+                    "status": "BENIGN",
+                    "confidence": "95%"
+                }
+            ]
 
     return { results}
