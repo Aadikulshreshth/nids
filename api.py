@@ -117,3 +117,19 @@ def predict_live_post():
         "success": True,
         "data": live_detect()
     }
+    
+@app.post("/predict_live")
+async def predict_live(request: dict = {}):
+    try:
+        data = live_detect()
+
+        return {
+            "status": "success",
+            "predictions": data
+        }
+
+    except Exception as e:
+        return {
+            "status": "error",
+            "message": str(e)
+        }
