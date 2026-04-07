@@ -79,4 +79,4 @@ def live_detect():
     if len(results) == 0:
         return {"results": []}
 
-    return {"results": results}
+    return { results}
