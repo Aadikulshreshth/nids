@@ -10,7 +10,7 @@ from features import extract_features
 
 app = FastAPI()
 
-#Enable CORS (important for frontend)
+#CORS (required for frontend)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -18,7 +18,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-#Load model files
+#Load model assets
 model = joblib.load("nids_rf_model.pkl")
 le = joblib.load("nids_label_encoder.pkl")
 features = joblib.load("nids_features_list.pkl")
@@ -32,29 +32,29 @@ def home():
     return {"status": "NIDS running 🚀"}
 
 
-@app.get("/live_detect")
-def live_detect():
+#MAIN LOGIC
+def process_flows():
     results = []
 
     try:
         for key, flow in list(flows.items()):
 
+            #allow small flows
             if len(flow) < 1:
                 continue
 
             features_dict = extract_features(flow)
-
             df = pd.DataFrame([features_dict])
 
             X_input = pd.DataFrame()
 
+            #match model features
             for f in features:
                 X_input[f] = df.get(f, 0)
 
             X_input.replace([np.inf, -np.inf], 0, inplace=True)
             X_input.fillna(0, inplace=True)
 
-            #skip if empty
             if X_input.shape[0] == 0:
                 continue
 
@@ -62,7 +62,7 @@ def live_detect():
                 pred = model.predict(X_input)
                 decoded = le.inverse_transform(pred)[0]
             except:
-                decoded = "BENIGN"  # fallback
+                decoded = "BENIGN"  #fallback
 
             results.append({
                 "timestamp": pd.Timestamp.now().strftime("%H:%M:%S"),
@@ -72,12 +72,21 @@ def live_detect():
                 "confidence": "90%"
             })
 
+            #clear processed flow
             flows[key] = []
 
     except Exception as e:
         print("ERROR:", e)
 
-    #ALWAYS return something (prevents 500 error)
+    return results
+
+
+#Endpoint for your logic
+@app.get("/live_detect")
+def live_detect():
+    results = process_flows()
+
+    #Always return something (prevents UI failure)
     if len(results) == 0:
         return [
             {
@@ -90,3 +99,9 @@ def live_detect():
         ]
 
     return results
+
+
+#Alias for Stitch UI (IMPORTANT)
+@app.get("/predict_live")
+def predict_live():
+    return live_detect()
