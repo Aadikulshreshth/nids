@@ -3,10 +3,11 @@ from fastapi.middleware.cors import CORSMiddleware
 import joblib
 import pandas as pd
 import numpy as np
+import requests
+import os
 
 app = FastAPI()
 
-# CORS (for frontend access)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -14,8 +15,18 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+MODEL_PATH = "nids_rf_model.pkl"
+MODEL_URL = "https://drive.google.com/uc?export=download&id=1HF5gDrxY99h2YLllnDL_I-t16OVluKcH"
+
+# 🔥 Download model if not present
+if not os.path.exists(MODEL_PATH):
+    print("Downloading model...")
+    r = requests.get(MODEL_URL)
+    with open(MODEL_PATH, "wb") as f:
+        f.write(r.content)
+
 # Load model
-model = joblib.load("nids_rf_model.pkl")
+model = joblib.load(MODEL_PATH)
 le = joblib.load("nids_label_encoder.pkl")
 features = joblib.load("nids_features_list.pkl")
 
