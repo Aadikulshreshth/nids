@@ -144,24 +144,13 @@ def predict_live_get():
 @app.api_route("/predict_live", methods=["GET", "POST"])
 async def predict_live(request: Request):
     try:
-        # Try to read JSON (if UI sends it)
-        try:
-            body = await request.json()
-        except:
-            body = {}
-
         data = live_detect()
 
         return {
-            "success": True,
-            "status": "success",
-            "data": data,
-            "predictions": data
+            "predictions": data 
         }
 
     except Exception as e:
         return {
-            "success": False,
-            "status": "error",
-            "message": str(e)
+            "predictions": []
         }
