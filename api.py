@@ -110,3 +110,10 @@ def predict_live():
         "success": True,
         "data": data
     }
+
+@app.post("/predict_live")
+def predict_live_post():
+    return {
+        "success": True,
+        "data": live_detect()
+    }
