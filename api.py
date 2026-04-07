@@ -18,7 +18,7 @@ app.add_middleware(
 MODEL_PATH = "nids_rf_model.pkl"
 MODEL_URL = "https://drive.google.com/uc?export=download&id=1HF5gDrxY99h2YLllnDL_I-t16OVluKcH"
 
-# 🔥 Download model if not present
+#Download model if not present
 if not os.path.exists(MODEL_PATH):
     print("Downloading model...")
     r = requests.get(MODEL_URL)
