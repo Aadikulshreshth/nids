@@ -133,3 +133,10 @@ async def predict_live(request: dict = {}):
             "status": "error",
             "message": str(e)
         }
+    
+@app.get("/predict_live")
+def predict_live_get():
+    return {
+        "status": "success",
+        "predictions": live_detect()
+    }
