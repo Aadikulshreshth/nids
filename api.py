@@ -141,13 +141,15 @@ def predict_live_get():
         "predictions": live_detect()
     }
 
-@app.api_route("/predict_live", methods=["GET", "POST"])
-async def predict_live(request: Request):
+def format_response():
     data = live_detect()
     return {"predictions": data}
+
+@@app.api_route("/predict_live", methods=["GET", "POST"])
+async def predict_live(request: Request):
+    return format_response()
 
 
 @app.api_route("/live_detect", methods=["GET", "POST"])
 async def live_detect_api(request: Request):
-    data = live_detect()
-    return {"predictions": data}
+    return format_response()
