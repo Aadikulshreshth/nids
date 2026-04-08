@@ -143,14 +143,11 @@ def predict_live_get():
 
 @app.api_route("/predict_live", methods=["GET", "POST"])
 async def predict_live(request: Request):
-    try:
-        data = live_detect()
+    data = live_detect()
+    return {"predictions": data}
 
-        return {
-            "predictions": data 
-        }
 
-    except Exception as e:
-        return {
-            "predictions": []
-        }
+@app.api_route("/live_detect", methods=["GET", "POST"])
+async def live_detect_api(request: Request):
+    data = live_detect()
+    return {"predictions": data}
