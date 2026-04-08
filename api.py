@@ -1,5 +1,5 @@
 from fastapi import FastAPI
-from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 import joblib
 import pandas as pd
 import numpy as np
@@ -10,52 +10,31 @@ from features import extract_features
 
 app = FastAPI()
 
-# ==============================
-#CORS CONFIG (FIXED)
-# ==============================
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["http://localhost:3000"],  #frontend origin
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
-#Force headers (ngrok fix)
-@app.middleware("http")
-async def force_cors(request, call_next):
-    response = await call_next(request)
-    response.headers["Access-Control-Allow-Origin"] = "http://localhost:3000"
-    response.headers["Access-Control-Allow-Methods"] = "*"
-    response.headers["Access-Control-Allow-Headers"] = "*"
-    return response
-
-
-# ==============================
-#LOAD MODEL FILES
-# ==============================
+# ======================================
+# LOAD MODEL FILES
+# ======================================
 model = joblib.load("nids_rf_model.pkl")
 le = joblib.load("nids_label_encoder.pkl")
 feature_list = joblib.load("nids_features_list.pkl")
 
 
-# ==============================
-#START SNIFFER THREAD
-# ==============================
+# ======================================
+# START SNIFFER THREAD
+# ======================================
 threading.Thread(target=start_sniffing, daemon=True).start()
 
 
-# ==============================
-#HOME
-# ==============================
+# ======================================
+# HOME
+# ======================================
 @app.get("/")
 def home():
     return {"status": "NIDS running 🚀"}
 
 
-# ==============================
-#CORE PROCESSING
-# ==============================
+# ======================================
+# CORE PROCESSING
+# ======================================
 def process_flows():
     results = []
 
@@ -70,7 +49,6 @@ def process_flows():
 
             X_input = pd.DataFrame()
 
-            # Match model features
             for f in feature_list:
                 X_input[f] = df.get(f, 0)
 
@@ -95,19 +73,18 @@ def process_flows():
             "confidence": "90%"
         })
 
-        flows[key] = []  # clear processed flow
+        flows[key] = []
 
     return results
 
 
-# ==============================
-#LIVE DETECT (RAW)
-# ==============================
+# ======================================
+# LIVE DETECT
+# ======================================
 @app.get("/live_detect")
 def live_detect():
     results = process_flows()
 
-    # fallback so UI never breaks
     if not results:
         return [
             {
@@ -122,11 +99,27 @@ def live_detect():
     return results
 
 
-# ==============================
-#MAIN FRONTEND ENDPOINT
-# ==============================
+# ======================================
+# PREFLIGHT (CORS FIX)
+# ======================================
+@app.options("/predict_live")
+def options_predict():
+    response = JSONResponse(content={"ok": True})
+    response.headers["Access-Control-Allow-Origin"] = "*"
+    response.headers["Access-Control-Allow-Methods"] = "*"
+    response.headers["Access-Control-Allow-Headers"] = "*"
+    return response
+
+
+# ======================================
+# MAIN FRONTEND ENDPOINT
+# ======================================
 @app.get("/predict_live")
 def predict_live():
-    return {
-        "predictions": live_detect()
-    }
+    response = JSONResponse(
+        content={"predictions": live_detect()}
+    )
+    response.headers["Access-Control-Allow-Origin"] = "*"
+    response.headers["Access-Control-Allow-Methods"] = "*"
+    response.headers["Access-Control-Allow-Headers"] = "*"
+    return response
