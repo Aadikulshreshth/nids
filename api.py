@@ -145,7 +145,7 @@ def format_response():
     data = live_detect()
     return {"predictions": data}
 
-@@app.api_route("/predict_live", methods=["GET", "POST"])
+@app.api_route("/predict_live", methods=["GET", "POST"])
 async def predict_live(request: Request):
     return format_response()
 
