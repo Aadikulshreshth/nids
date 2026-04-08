@@ -1,4 +1,4 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 import joblib
 import pandas as pd
@@ -11,7 +11,26 @@ from features import extract_features
 app = FastAPI()
 
 # ======================================
-# LOAD MODEL FILES
+# GLOBAL CORS (WORKS FOR NGROK)
+# ======================================
+@app.middleware("http")
+async def cors_fix(request: Request, call_next):
+    # HANDLE PREFLIGHT FIRST
+    if request.method == "OPTIONS":
+        response = JSONResponse(content={"ok": True})
+    else:
+        response = await call_next(request)
+
+    # FORCE HEADERS
+    response.headers["Access-Control-Allow-Origin"] = "*"
+    response.headers["Access-Control-Allow-Methods"] = "*"
+    response.headers["Access-Control-Allow-Headers"] = "*"
+
+    return response
+
+
+# ======================================
+# LOAD MODEL
 # ======================================
 model = joblib.load("nids_rf_model.pkl")
 le = joblib.load("nids_label_encoder.pkl")
@@ -19,27 +38,18 @@ feature_list = joblib.load("nids_features_list.pkl")
 
 
 # ======================================
-# START SNIFFER THREAD
+# START SNIFFER
 # ======================================
 threading.Thread(target=start_sniffing, daemon=True).start()
 
 
 # ======================================
-# HOME
-# ======================================
-@app.get("/")
-def home():
-    return {"status": "NIDS running 🚀"}
-
-
-# ======================================
-# CORE PROCESSING
+# CORE LOGIC
 # ======================================
 def process_flows():
     results = []
 
     for key, flow in list(flows.items()):
-
         if len(flow) < 1:
             continue
 
@@ -55,14 +65,11 @@ def process_flows():
             X_input.replace([np.inf, -np.inf], 0, inplace=True)
             X_input.fillna(0, inplace=True)
 
-            if X_input.shape[0] == 0:
-                continue
-
             pred = model.predict(X_input)
             decoded = le.inverse_transform(pred)[0]
 
         except Exception as e:
-            print("Prediction Error:", e)
+            print("Error:", e)
             decoded = "BENIGN"
 
         results.append({
@@ -79,47 +86,16 @@ def process_flows():
 
 
 # ======================================
-# LIVE DETECT
-# ======================================
-@app.get("/live_detect")
-def live_detect():
-    results = process_flows()
-
-    if not results:
-        return [
-            {
-                "timestamp": "now",
-                "threat_type": "BENIGN",
-                "severity": "LOW",
-                "status": "BENIGN",
-                "confidence": "95%"
-            }
-        ]
-
-    return results
-
-
-# ======================================
-# PREFLIGHT (CORS FIX)
-# ======================================
-@app.options("/predict_live")
-def options_predict():
-    response = JSONResponse(content={"ok": True})
-    response.headers["Access-Control-Allow-Origin"] = "*"
-    response.headers["Access-Control-Allow-Methods"] = "*"
-    response.headers["Access-Control-Allow-Headers"] = "*"
-    return response
-
-
-# ======================================
-# MAIN FRONTEND ENDPOINT
+# ENDPOINT
 # ======================================
 @app.get("/predict_live")
 def predict_live():
-    response = JSONResponse(
-        content={"predictions": live_detect()}
-    )
-    response.headers["Access-Control-Allow-Origin"] = "*"
-    response.headers["Access-Control-Allow-Methods"] = "*"
-    response.headers["Access-Control-Allow-Headers"] = "*"
-    return response
+    return {
+        "predictions": process_flows() or [{
+            "timestamp": "now",
+            "threat_type": "BENIGN",
+            "severity": "LOW",
+            "status": "BENIGN",
+            "confidence": "95%"
+        }]
+    }
