@@ -48,6 +48,9 @@ threading.Thread(target=start_sniffing, daemon=True).start()
 def home():
     return {"status": "NIDS running"}
 
+@app.get("/health")
+def health():
+    return {"status": "ok"}
 
 # ==============================
 # CORE PROCESSING
