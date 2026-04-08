@@ -1,45 +1,44 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 import joblib
 import pandas as pd
 import numpy as np
 import threading
-from fastapi import Request
+
 from sniffer import flows, start_sniffing
 from features import extract_features
 
 app = FastAPI()
 
-#CORS (required for frontend)
+# ---------------- CORS (IMPORTANT FOR FRONTEND) ----------------
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
+    allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-#Load model assets
+# ---------------- LOAD MODEL ----------------
 model = joblib.load("nids_rf_model.pkl")
 le = joblib.load("nids_label_encoder.pkl")
 features = joblib.load("nids_features_list.pkl")
 
-#Start packet sniffer in background
+# ---------------- START SNIFFER ----------------
 threading.Thread(target=start_sniffing, daemon=True).start()
 
-
+# ---------------- HEALTH CHECK ----------------
 @app.get("/")
 def home():
     return {"status": "NIDS running 🚀"}
 
-
-#MAIN LOGIC
+# ---------------- CORE LOGIC ----------------
 def process_flows():
     results = []
 
     try:
         for key, flow in list(flows.items()):
 
-            #allow small flows
             if len(flow) < 1:
                 continue
 
@@ -48,10 +47,11 @@ def process_flows():
 
             X_input = pd.DataFrame()
 
-            #match model features
+            #Match model features
             for f in features:
                 X_input[f] = df.get(f, 0)
 
+            #Clean data
             X_input.replace([np.inf, -np.inf], 0, inplace=True)
             X_input.fillna(0, inplace=True)
 
@@ -62,7 +62,7 @@ def process_flows():
                 pred = model.predict(X_input)
                 decoded = le.inverse_transform(pred)[0]
             except:
-                decoded = "BENIGN"  #fallback
+                decoded = "BENIGN"
 
             results.append({
                 "timestamp": pd.Timestamp.now().strftime("%H:%M:%S"),
@@ -72,7 +72,7 @@ def process_flows():
                 "confidence": "90%"
             })
 
-            #clear processed flow
+            #Clear processed flow
             flows[key] = []
 
     except Exception as e:
@@ -80,15 +80,13 @@ def process_flows():
 
     return results
 
-
-#Endpoint for your logic
-@app.get("/live_detect")
-def live_detect():
+# ---------------- RESPONSE FORMAT ----------------
+def format_response():
     results = process_flows()
 
-    #Always return something (prevents UI failure)
+    #Always return something (prevents UI failure
     if len(results) == 0:
-        return [
+        results = [
             {
                 "timestamp": "now",
                 "threat_type": "BENIGN",
@@ -98,57 +96,12 @@ def live_detect():
             }
         ]
 
-    return results
+    return {"predictions": results}
 
-
-#Alias for Stitch UI (IMPORTANT)
-@app.get("/predict_live")
-def predict_live():
-    data = live_detect()
-
-    return {
-        "success": True,
-        "data": data
-    }
-
-@app.post("/predict_live")
-def predict_live_post():
-    return {
-        "success": True,
-        "data": live_detect()
-    }
-    
-@app.post("/predict_live")
-async def predict_live(request: dict = {}):
-    try:
-        data = live_detect()
-
-        return {
-            "status": "success",
-            "predictions": data
-        }
-
-    except Exception as e:
-        return {
-            "status": "error",
-            "message": str(e)
-        }
-    
-@app.get("/predict_live")
-def predict_live_get():
-    return {
-        "status": "success",
-        "predictions": live_detect()
-    }
-
-def format_response():
-    data = live_detect()
-    return {"predictions": data}
-
+# ---------------- API ENDPOINTS ----------------
 @app.api_route("/predict_live", methods=["GET", "POST"])
 async def predict_live(request: Request):
     return format_response()
-
 
 @app.api_route("/live_detect", methods=["GET", "POST"])
 async def live_detect_api(request: Request):
