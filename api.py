@@ -13,8 +13,8 @@ app = FastAPI()
 # ---------------- CORS (IMPORTANT FOR FRONTEND) ----------------
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],   # keep *
-    allow_credentials=False,  # 🔥 CHANGE THIS
+    allow_origins=["http://localhost:3000"],
+    allow_credentials=False,  
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -122,11 +122,4 @@ async def predict_live(request: Request):
 
 @app.options("/{full_path:path}")
 async def preflight_handler():
-    return JSONResponse(
-        content={},
-        headers={
-            "Access-Control-Allow-Origin": "*",
-            "Access-Control-Allow-Headers": "*",
-            "Access-Control-Allow-Methods": "*",
-        }
-    )
+    return {"message": "OK"}
