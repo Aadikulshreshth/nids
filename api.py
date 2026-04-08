@@ -1,5 +1,6 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 import joblib
 import pandas as pd
 import numpy as np
@@ -11,20 +12,29 @@ from features import extract_features
 app = FastAPI()
 
 # ==============================
-# CORS 
+# CORS (NGROK + LOCALHOST FIX)
 # ==============================
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  
+    allow_origins=["*"],   # allow all (important for ngrok)
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# Handle preflight (VERY IMPORTANT)
+# Force CORS headers (extra safety for ngrok)
+@app.middleware("http")
+async def cors_fix(request, call_next):
+    response = await call_next(request)
+    response.headers["Access-Control-Allow-Origin"] = "*"
+    response.headers["Access-Control-Allow-Methods"] = "GET, POST, OPTIONS"
+    response.headers["Access-Control-Allow-Headers"] = "*"
+    return response
+
+# Handle preflight requests
 @app.options("/{path:path}")
 async def options_handler(path: str):
-    return {}
+    return JSONResponse(content={"ok": True})
 
 
 # ==============================
@@ -46,11 +56,16 @@ threading.Thread(target=start_sniffing, daemon=True).start()
 # ==============================
 @app.get("/")
 def home():
-    return {"status": "NIDS running"}
+    return {"status": "NIDS running 🚀"}
 
+
+# ==============================
+# HEALTH (IMPORTANT FOR FRONTEND)
+# ==============================
 @app.get("/health")
 def health():
     return {"status": "ok"}
+
 
 # ==============================
 # CORE PROCESSING
@@ -68,7 +83,6 @@ def process_flows():
 
             X_input = pd.DataFrame()
 
-            # match model features
             for f in feature_list:
                 X_input[f] = df.get(f, 0)
 
@@ -93,19 +107,18 @@ def process_flows():
             "confidence": "90%"
         })
 
-        flows[key] = []  # clear processed flow
+        flows[key] = []
 
     return results
 
 
 # ==============================
-# LIVE DETECT (RAW)
+# LIVE DETECT
 # ==============================
 @app.get("/live_detect")
 def live_detect():
     results = process_flows()
 
-    # fallback so UI never breaks
     if not results:
         return [
             {
@@ -121,7 +134,7 @@ def live_detect():
 
 
 # ==============================
-# MAIN FRONTEND ENDPOINT
+# FRONTEND ENDPOINT
 # ==============================
 @app.get("/predict_live")
 def predict_live():
