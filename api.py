@@ -1,95 +1,115 @@
-from fastapi import FastAPI, Request
+from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 import joblib
 import pandas as pd
 import numpy as np
 import threading
-from fastapi.responses import JSONResponse
+
 from sniffer import flows, start_sniffing
 from features import extract_features
 
 app = FastAPI()
 
-# ---------------- CORS (IMPORTANT FOR FRONTEND) ----------------
-origins = [
-    "http://localhost:3000",
-]
-
+# ==============================
+#CORS CONFIG (FIXED)
+# ==============================
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=origins,
+    allow_origins=["http://localhost:3000"],  #frontend origin
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
-# ---------------- LOAD MODEL ----------------
+
+#Force headers (ngrok fix)
+@app.middleware("http")
+async def force_cors(request, call_next):
+    response = await call_next(request)
+    response.headers["Access-Control-Allow-Origin"] = "http://localhost:3000"
+    response.headers["Access-Control-Allow-Methods"] = "*"
+    response.headers["Access-Control-Allow-Headers"] = "*"
+    return response
+
+
+# ==============================
+#LOAD MODEL FILES
+# ==============================
 model = joblib.load("nids_rf_model.pkl")
 le = joblib.load("nids_label_encoder.pkl")
-features = joblib.load("nids_features_list.pkl")
+feature_list = joblib.load("nids_features_list.pkl")
 
-# ---------------- START SNIFFER ----------------
+
+# ==============================
+#START SNIFFER THREAD
+# ==============================
 threading.Thread(target=start_sniffing, daemon=True).start()
 
-# ---------------- HEALTH CHECK ----------------
+
+# ==============================
+#HOME
+# ==============================
 @app.get("/")
 def home():
     return {"status": "NIDS running 🚀"}
 
-# ---------------- CORE LOGIC ----------------
+
+# ==============================
+#CORE PROCESSING
+# ==============================
 def process_flows():
     results = []
 
-    try:
-        for key, flow in list(flows.items()):
+    for key, flow in list(flows.items()):
 
-            if len(flow) < 1:
-                continue
+        if len(flow) < 1:
+            continue
 
+        try:
             features_dict = extract_features(flow)
             df = pd.DataFrame([features_dict])
 
             X_input = pd.DataFrame()
 
-            #Match model features
-            for f in features:
+            # Match model features
+            for f in feature_list:
                 X_input[f] = df.get(f, 0)
 
-            #Clean data
             X_input.replace([np.inf, -np.inf], 0, inplace=True)
             X_input.fillna(0, inplace=True)
 
             if X_input.shape[0] == 0:
                 continue
 
-            try:
-                pred = model.predict(X_input)
-                decoded = le.inverse_transform(pred)[0]
-            except:
-                decoded = "BENIGN"
+            pred = model.predict(X_input)
+            decoded = le.inverse_transform(pred)[0]
 
-            results.append({
-                "timestamp": pd.Timestamp.now().strftime("%H:%M:%S"),
-                "threat_type": decoded,
-                "severity": "LOW" if decoded == "BENIGN" else "HIGH",
-                "status": "BENIGN" if decoded == "BENIGN" else "THREAT",
-                "confidence": "90%"
-            })
+        except Exception as e:
+            print("Prediction Error:", e)
+            decoded = "BENIGN"
 
-            #Clear processed flow
-            flows[key] = []
+        results.append({
+            "timestamp": pd.Timestamp.now().strftime("%H:%M:%S"),
+            "threat_type": decoded,
+            "severity": "LOW" if decoded == "BENIGN" else "HIGH",
+            "status": "BENIGN" if decoded == "BENIGN" else "THREAT",
+            "confidence": "90%"
+        })
 
-    except Exception as e:
-        print("ERROR:", e)
+        flows[key] = []  # clear processed flow
 
     return results
 
-# ---------------- RESPONSE FORMAT ----------------
-def format_response():
+
+# ==============================
+#LIVE DETECT (RAW)
+# ==============================
+@app.get("/live_detect")
+def live_detect():
     results = process_flows()
 
-    #Always return something (prevents UI failure
-    if len(results) == 0:
-        results = [
+    # fallback so UI never breaks
+    if not results:
+        return [
             {
                 "timestamp": "now",
                 "threat_type": "BENIGN",
@@ -99,46 +119,14 @@ def format_response():
             }
         ]
 
-    return {"predictions": results}
+    return results
 
-# ---------------- API ENDPOINTS ----------------
-@app.api_route("/predict_live", methods=["GET", "POST"])
-async def predict_live(request: Request):
-    results = process_flows()
 
-    if len(results) == 0:
-        results = [
-            {
-                "timestamp": "now",
-                "threat_type": "BENIGN",
-                "severity": "LOW",
-                "status": "BENIGN",
-                "confidence": "95%"
-            }
-        ]
-
+# ==============================
+#MAIN FRONTEND ENDPOINT
+# ==============================
+@app.get("/predict_live")
+def predict_live():
     return {
-        "success": True,
-        "data": results,
-        "results": results,
-        "predictions": results
+        "predictions": live_detect()
     }
-
-@app.options("/{full_path:path}")
-async def preflight_handler():
-    return JSONResponse(
-        content={},
-        headers={
-            "Access-Control-Allow-Origin": "*",
-            "Access-Control-Allow-Headers": "*",
-            "Access-Control-Allow-Methods": "*",
-        }
-    )
-
-@app.middleware("http")
-async def add_cors_headers(request, call_next):
-    response = await call_next(request)
-    response.headers["Access-Control-Allow-Origin"] = "http://localhost:3000"
-    response.headers["Access-Control-Allow-Methods"] = "*"
-    response.headers["Access-Control-Allow-Headers"] = "*"
-    return response
