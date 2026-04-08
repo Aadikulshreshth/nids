@@ -46,7 +46,7 @@ threading.Thread(target=start_sniffing, daemon=True).start()
 # ==============================
 @app.get("/")
 def home():
-    return {"status": "NIDS running 🚀"}
+    return {"status": "NIDS running"}
 
 
 # ==============================
