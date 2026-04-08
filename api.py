@@ -4,7 +4,7 @@ import joblib
 import pandas as pd
 import numpy as np
 import threading
-
+from fastapi.responses import JSONResponse
 from sniffer import flows, start_sniffing
 from features import extract_features
 
@@ -13,12 +13,11 @@ app = FastAPI()
 # ---------------- CORS (IMPORTANT FOR FRONTEND) ----------------
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
+    allow_origins=["*"],   # keep *
+    allow_credentials=False,  # 🔥 CHANGE THIS
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
 # ---------------- LOAD MODEL ----------------
 model = joblib.load("nids_rf_model.pkl")
 le = joblib.load("nids_label_encoder.pkl")
@@ -120,3 +119,14 @@ async def predict_live(request: Request):
         "results": results,
         "predictions": results
     }
+
+@app.options("/{full_path:path}")
+async def preflight_handler():
+    return JSONResponse(
+        content={},
+        headers={
+            "Access-Control-Allow-Origin": "*",
+            "Access-Control-Allow-Headers": "*",
+            "Access-Control-Allow-Methods": "*",
+        }
+    )
